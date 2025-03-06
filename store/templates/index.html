@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block main_block %}
+
+<div class="min-h-screen bg-gradient-to-b from-black via-gray-900 to-black">
+    <div class="text-center p-10">
+        <h1 class="font-bold text-4xl mb-4 text-white">Apple Thrift</h1>
+        <p class="text-2xl text-white">Apple Summer Sale started from 2nd March to 10th April</p>
+    </div>
+
+    <!-- Search Bar and Category Filter -->
+    <div class="flex flex-col items-center mb-6">
+        <form method="GET" class="relative w-3/4 md:w-1/2">
+            <span class="absolute left-4 top-3 text-gray-500"><i class="fas fa-search"></i></span>
+            <input type="text" id="search" name="search" placeholder="Search" 
+                class="w-full pl-10 pr-4 py-2 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                value="{{ request.GET.search }}">
+            <button type="submit" class="hidden"></button>
+        </form>
+
+        <div class="mt-4 flex gap-4">
+            <a href="{% url 'index' %}" class="text-white px-4 py-2 bg-gray-800 rounded-full hover:bg-gray-700">
+                All
+            </a>
+            {% for category in categories %}
+            <a href="?category={{ category.name }}" class="text-white px-4 py-2 bg-gray-800 rounded-full hover:bg-gray-700">
+                {{ category.name }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Product Grid -->
+    <section id="Projects"
+        class="w-fit mx-auto grid grid-cols-1 lg:grid-cols-4 md:grid-cols-2 justify-items-center justify-center gap-y-20 gap-x-14 mt-10 mb-5">
+        {% for p in products %}
+        <div class="w-72 bg-white shadow-md rounded-xl duration-500 hover:scale-105 hover:shadow-xl mb-4">
+            <a href="{% url 'product-detail' p.id %}">
+                {% if p.image %}
+                <img src="{{ p.image.url }}" alt="Product" class="h-80 w-72 object-cover rounded-t-xl" />
+                {% else %}
+                <img src="https://via.placeholder.com/300" alt="Product" class="h-80 w-72 object-cover rounded-t-xl" />
+                {% endif %}
+                <div class="px-4 py-3 w-72">
+                    <span class="text-gray-400 mr-3 uppercase text-xs">
+                        <i class="fa-brands fa-apple"></i>
+                    </span>
+                    <p class="text-lg font-bold text-black truncate block capitalize">{{ p.name }}</p>
+                </div>
+            </a>
+        </div>
+        {% empty %}
+        <p class="text-white text-center col-span-4">No products found.</p>
+        {% endfor %}
+    </section>
+</div>
+
+{% endblock %}
