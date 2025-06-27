@@ -2,44 +2,69 @@
 
 {% block main_block %}
 
-<div class="min-h-screen w-full flex flex-wrap justify-center gap-6 p-6 bg-gray-200 dark:bg-gray-800">
-    {% for w in wishlist %}
-    <!-- product card -->
-    <article class="w-full sm:w-80 md:w-72 bg-white rounded-lg shadow-lg overflow-hidden dark:bg-gray-700">
-        <div class="h-56 w-full overflow-hidden">
-            <img class="object-cover w-full h-full" src="{{ w.product_variant.product.image.url }}" alt="{{ w.product_variant.product.name }}" />
-        </div>
+<div class="bg-background text-primary-foreground">
+  <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+    <div class="overflow-hidden bg-card shadow sm:rounded-lg">
+      <table class="min-w-full">
+        <thead>
+          <tr class="border-b border-border">
+            <th class="text-left p-4 text-muted-foreground">Products</th>
+            <th class="text-left p-4 text-muted-foreground">Unit Price</th>
+            <th class="text-left p-4 text-muted-foreground">Variant</th>
+            <th class="text-left p-4 text-muted-foreground">Stock Status</th>
+            <th class="text-left p-4 text-muted-foreground">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for w in wishlist %}
+          <tr class="border-b border-border">
+            <!-- Product Image & Name -->
+            <td class="p-4 flex items-center gap-4">
+              <img class="w-12 h-12 object-cover" src="{{ w.product_variant.product.image.url }}" alt="{{ w.product_variant.product.name }}" />
+              <span>{{ w.product_variant.product.name }}</span>
+            </td>
 
-        <div class="flex flex-col gap-2 mt-4 px-4">
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-50">{{ w.product_variant.product.name }}</h2>
-            <span class="text-gray-600 dark:text-gray-300">{{ w.color }}</span>
-            <span class="font-semibold text-gray-800 dark:text-gray-50">{{ w.product_variant.storage }}</span>
-        </div>
+            <!-- Unit Price -->
+            <td class="p-4">₹{{ w.product_variant.price }}</td>
 
-        <div class="mt-4 p-4 border-t border-gray-200 dark:border-gray-500 flex flex-col gap-2">
-            <!-- Add to Cart Button -->
-            <form action="{%url 'add-to-cart-wishlist'%}" method="POST">
+            <td class="p-4">{{ w.product_variant.storage }}, {{w.color}}</td>
+
+            <!-- Stock Status -->
+            <td class="p-4 {% if w.product_variant.stock > 0 %} text-green-500 {% else %} text-red-500 {% endif %}">
+              {% if w.product_variant.stock > 0 %}
+                In Stock
+              {% else %}
+                Out of Stock
+              {% endif %}
+            </td>
+
+            <!-- Actions (Add to Cart & Remove) -->
+            <td class="p-4 flex items-center gap-2">
+              <form action="{% url 'add-to-cart-wishlist' %}" method="POST">
                 {% csrf_token %}
                 <input type="hidden" name="variant" value="{{ w.product_variant.id }}">
                 <input type="hidden" name="color" value="{{ w.color.id }}">
                 <input type="hidden" name="quantity" value="1">
                 <button 
-                name="action"
-                value="cart"
-                type="submit"
-                class="w-full flex justify-between items-center font-bold cursor-pointer text-gray-800 dark:text-gray-50">
-                    <span class="w-full bg-blue-500 text-white font-bold py-2 rounded-md hover:bg-blue-600">Add to Cart</span>
+                    name="action"
+                    value="cart"
+                    type="submit"
+                    class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition">
+                    Add to Cart
                 </button>
-            </form>
+              </form>
 
-            <!-- Remove from Wishlist Button -->
-                <button 
-                class="w-full bg-red-500 text-white font-bold py-2 rounded-md hover:bg-red-600">
-                    <a href="{%url 'wishlist-item-delete' w.id%}">Remove</a>
-                </button>
-        </div>
-    </article>
-    {% endfor %}
+              <a href="{% url 'wishlist-item-delete' w.id %}" 
+                 class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition">
+                ✖
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 {% endblock %}

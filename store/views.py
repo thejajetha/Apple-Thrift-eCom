@@ -1,43 +1,56 @@
-from django.shortcuts import render,redirect
+from django.shortcuts import render,redirect,get_object_or_404
 from django.views.generic import View
-from store.forms import SignUpForm,OtpVerifyForm,SignInForm,OrderForm
+from store.forms import SignUpForm,OtpVerifyForm,SignInForm,OrderForm,ReviewForm
 from store.models import User
-from twilio.rest import Client
+# from twilio.rest import Client
+from django.core.mail import send_mail
 from decouple import config
 from django.contrib.auth import authenticate,login,logout
-from store.models import Product,Cart,ProductVariant,Color,OrderItem,Order,Category,Wishlist
+from store.models import Product,Cart,ProductVariant,Color,OrderItem,Order,Category,Wishlist,Review
 import razorpay
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from store.decorators import signin_required
+from django.contrib import messages
+
 
 # Create your views here.
 
-twilio_acc_sid=config("TWILIO_ACC_SID")
+# twilio_acc_sid=config("TWILIO_ACC_SID")
 
-twilio_acc_secret=config("TWILIO_ACC_SECRET")
+# twilio_acc_secret=config("TWILIO_ACC_SECRET")
 
-twilio_phone_number=config("TWILIO_PHONE_NUMBER")
+# twilio_phone_number=config("TWILIO_PHONE_NUMBER")
 
-my_phone_number=config('MY_PHONE_NUMBER')
+# my_phone_number=config('MY_PHONE_NUMBER')
 
 rzp_key_id=config("RZP_KEY_ID")
 
 rzp_key_secret=config("RZP_KEY_SECRET")
 
-def sent_otp_phone(user_object):
+# def sent_otp_phone(user_object):
 
+#     user_object.generate_otp()
+
+#     account_sid = twilio_acc_sid
+#     auth_token = twilio_acc_secret
+#     client = Client(account_sid, auth_token)
+#     message = client.messages.create(
+#     from_=twilio_phone_number,
+#     body=user_object.otp,
+#     to=my_phone_number
+#     )
+#     print(message.sid)
+
+def send_otp_email(user_object):
     user_object.generate_otp()
+    subject = "Your OTP for Account Verification"
+    message = f"Hello {user_object.username},\n\nYour OTP for verifying your email is: {user_object.otp}\n\nThank you!"
+    from_email = None  # Will use DEFAULT_FROM_EMAIL
+    recipient_list = [user_object.email]
+    
+    send_mail(subject, message, from_email, recipient_list)
 
-    account_sid = twilio_acc_sid
-    auth_token = twilio_acc_secret
-    client = Client(account_sid, auth_token)
-    message = client.messages.create(
-    from_=twilio_phone_number,
-    body=user_object.otp,
-    to=my_phone_number
-    )
-    print(message.sid)
 
 class SignUpView(View):
 
@@ -63,7 +76,7 @@ class SignUpView(View):
 
             user_instance.save()
 
-            sent_otp_phone(user_instance)
+            send_otp_email(user_instance)
 
             return redirect("otp-verify")
         
@@ -180,9 +193,11 @@ class ProductDetailView(View):
 
         id=kwargs.get("pk")
 
-        qs=Product.objects.get(id=id)
+        qs=get_object_or_404(Product,id=id)
 
-        return render(request,self.template_name,{'product':qs})
+        reviews=Review.objects.filter(product=qs).order_by("-created_date")
+
+        return render(request,self.template_name,{'product':qs,"reviews":reviews})
     
 @method_decorator(signin_required,name="dispatch") 
 class AddToCartOrWishlistView(View):
@@ -192,32 +207,65 @@ class AddToCartOrWishlistView(View):
         action=request.POST.get("action")
 
         product_variant_id=request.POST.get("variant")
-        product_variant_instance=ProductVariant.objects.get(id=product_variant_id)
 
         color_id=request.POST.get("color")
-        color_instance=Color.objects.get(id=color_id)
 
-        qty=request.POST.get("quantity")
+        qty=int(request.POST.get("quantity"))
+
+        if not product_variant_id or not color_id:
+
+            messages.error(request, "Please select a product variant and color.")
+            
+            return redirect(request.META.get("HTTP_REFERER", "index"))
+
+        product_variant_instance=get_object_or_404(ProductVariant,id=product_variant_id)
+        color_instance=get_object_or_404(Color,id=color_id)
 
         if action=="cart":
 
-            Cart.objects.create(
+            existing_item=Cart.objects.filter(
+                user=request.user,
+                product_variant=product_variant_instance,
+                color=color_instance,
+                is_order_placed=False
+                ).first()
+            
+            if existing_item:
+                existing_item.quantity+=qty
+                existing_item.save()
+            
+            else:
+                Cart.objects.create(
                 product_variant=product_variant_instance,
                 color=color_instance,
                 quantity=qty,
-                user=request.user)
+                user=request.user
+                )
+
 
             return redirect("index")
         
         if action=="wishlist":
 
-            Wishlist.objects.create(
+            existing_item=Wishlist.objects.filter(
                 user=request.user,
                 product_variant=product_variant_instance,
                 color=color_instance
-            )
+            ).exists()
 
-            return redirect('index')
+            if not existing_item:
+
+                Wishlist.objects.create(
+                user=request.user,
+                product_variant=product_variant_instance,
+                color=color_instance,
+                )
+
+            else:
+
+                print("Item already exists in wishlist")
+
+            return redirect('wishlist-summary')
 
 @method_decorator(signin_required,name="dispatch")  
 class CartSummaryView(View):
@@ -265,6 +313,38 @@ class WishlistItemDeleteView(View):
 
         return redirect("wishlist-summary")        
 
+@method_decorator(signin_required,name="dispatch")
+class ReviewCreateView(View):
+
+    def post(self, request, *args, **kwargs):
+
+        id = kwargs.get("pk")
+        product = get_object_or_404(Product, id=id)
+        form_instance=ReviewForm(request.POST)
+
+        has_purchased = OrderItem.objects.filter(           # Check if the user has purchased the product
+            order__customer=request.user,
+            product_variant__product=product
+        ).exists()
+
+        if not has_purchased:
+            messages.error(request, "You must purchase this product before leaving a review.")
+            return redirect("product-detail",pk=product.id)
+
+        if form_instance.is_valid():
+            existing_review = Review.objects.filter(user=request.user, product=product).exists()
+
+            if existing_review:
+                messages.error(request, "You have already reviewed this product.")
+            else:
+                review = form_instance.save(commit=False)
+                review.user = request.user
+                review.product = product
+                review.save()
+                messages.success(request, "Review submitted successfully.")
+
+        return redirect("product-detail",pk=product.id)
+
 @method_decorator(signin_required,name="dispatch")    
 class OrderCreateView(View):
      
@@ -272,13 +352,21 @@ class OrderCreateView(View):
 
      form_class=OrderForm
 
+     COD_LIMIT=100000
+
      def get(self,request,*args,**kwargs):
          
-         form_instance=self.form_class()
-
          cart_items=Cart.objects.filter(user=request.user,is_order_placed=False)
 
          basket_total=sum([c.item_total() for c in cart_items])
+
+         last_order = Order.objects.filter(customer=request.user).order_by('-created_date').first()
+         initial_data = {}
+         if last_order:
+            initial_data['address'] = last_order.address
+            initial_data['phone'] = last_order.phone
+
+         form_instance = self.form_class(initial=initial_data)
 
          return render(request,self.template_name,{"form":form_instance,"cart_items":cart_items,"basket_total":basket_total})
      
@@ -290,9 +378,19 @@ class OrderCreateView(View):
              
              form_instance.instance.customer=request.user
 
-             order_object=form_instance.save() 
-
              cart_object=Cart.objects.filter(user=request.user,is_order_placed=False)
+
+             basket_total = sum([c.item_total() for c in cart_object])
+
+             payment_method=request.POST.get('payment_method')
+
+             if payment_method == 'COD' and basket_total > self.COD_LIMIT:
+
+                messages.error(request, f"COD is not available for orders above ₹{self.COD_LIMIT}.Please select an online payment method.")
+
+                return redirect('order-create') 
+
+             order_object=form_instance.save() 
 
              for ci in cart_object:
                  
@@ -307,8 +405,6 @@ class OrderCreateView(View):
                  ci.is_order_placed=True
 
                  ci.save()
-
-             payment_method=request.POST.get('payment_method')
 
              if payment_method=='ONLINE':
                  
@@ -375,7 +471,6 @@ class PaymentVerificationView(View):
             print("failed  signature verfication")
 
         return redirect('order-summary')   #redirect to our callback url 
-
 
 
      

@@ -26,7 +26,22 @@
               <p class="w-96 text-xs leading-3 text-gray-600 pt-2">Quantity: {{c.quantity }}</p>
               <div class="flex items-center justify-between pt-5">
                 <div class="flex itemms-center">
-                  <p class="text-xs leading-3 underline text-gray-800 cursor-pointer">Add to favorites</p>
+
+                  <!-- Add to Cart Button -->
+                  <form action="{%url 'add-to-cart-wishlist'%}" method="POST">
+                      {% csrf_token %}
+                      <input type="hidden" name="variant" value="{{ c.product_variant.id }}">
+                      <input type="hidden" name="color" value="{{ c.color.id }}">
+                      <input type="hidden" name="quantity" value="1">
+                      <button 
+                      name="action"
+                      value="wishlist"
+                      type="submit"
+                      class="w-full flex justify-between items-center font-bold cursor-pointer text-gray-800 dark:text-gray-50">
+                          <span class="text-xs leading-3 underline text-gray-800 cursor-pointer">Add to Wishlist</span>
+                      </button>
+                  </form>
+          
                   <a href="{%url 'cart-item-delete' c.id%}" class="text-xs leading-3 underline text-red-500 pl-5 cursor-pointer">Remove</a>
                 </div>
                 <p class="text-base font-black leading-none text-gray-800">₹{{c.item_total}}</p>

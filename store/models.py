@@ -110,6 +110,12 @@ class Review(BaseModel):
     rating = models.PositiveIntegerField()
 
     comment = models.TextField()
+
+    class Meta:
+        unique_together = ("product", "user")  # A user can only review a product once
+
+    def __str__(self):
+        return f"{self.user.username} - {self.product.name} - {self.rating} Stars"
     
 
 class Cart(BaseModel):
